@@ -24,11 +24,6 @@ on:
         description: 'Azure App Service name'
         required: true
         type: string
-      clickup_webhook_url:
-        description: 'Clickup webhook URL for notifications'
-        required: false
-        type: string
-        default: ''
       dockerfile_path:
         description: 'Path to Dockerfile'
         required: false
