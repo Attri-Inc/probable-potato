@@ -1,0 +1,86 @@
+name: Deploy to App Service
+
+on:
+  workflow_call:
+    inputs:
+      acr_name:
+        description: 'Azure Container Registry name'
+        required: true
+        type: string
+      image_name:
+        description: 'Docker image name'
+        required: true
+        type: string
+      image_tag:
+        description: 'Docker image tag'
+        required: false
+        type: string
+        default: 'latest'
+      resource_group:
+        description: 'Azure Resource Group name'
+        required: true
+        type: string
+      app_service_name:
+        description: 'Azure App Service name'
+        required: true
+        type: string
+      dockerfile_path:
+        description: 'Path to Dockerfile'
+        required: false
+        type: string
+        default: './Dockerfile'
+      build_context:
+        description: 'Docker build context'
+        required: false
+        type: string
+        default: '.'
+    secrets:
+      AZURE_CREDENTIALS:
+        required: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Login to ACR
+        run: |
+          az acr login --name ${{ inputs.acr_name }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ inputs.build_context }}
+          file: ${{ inputs.dockerfile_path }}
+          push: true
+          tags: |
+            ${{ inputs.acr_name }}.azurecr.io/${{ inputs.image_name }}:${{ inputs.image_tag }}
+            ${{ inputs.acr_name }}.azurecr.io/${{ inputs.image_name }}:${{ github.sha }}
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Configure App Service to use ACR image
+        run: |
+          az webapp config container set \
+            --name ${{ inputs.app_service_name }} \
+            --resource-group ${{ inputs.resource_group }} \
+            --container-image-name ${{ inputs.acr_name }}.azurecr.io/${{ inputs.image_name }}:${{ inputs.image_tag }} \
+            --container-registry-url https://${{ inputs.acr_name }}.azurecr.io
+
+      - name: Restart App Service
+        run: |
+          az webapp restart \
+            --name ${{ inputs.app_service_name }} \
+            --resource-group ${{ inputs.resource_group }}
