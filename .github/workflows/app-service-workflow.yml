@@ -48,6 +48,27 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        
+      - name: Debug - Check if secret is received
+        run: |
+          if [ -z "${{ secrets.AZURE_CREDENTIALS }}" ]; then
+            echo "::error::AZURE_CREDENTIALS secret is EMPTY or not passed"
+          else
+            echo "Secret length: ${#CREDS}"
+            echo "First 10 chars: ${CREDS:0:10}..."
+          fi
+        env:
+          CREDS: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Debug - Validate JSON format
+        run: |
+          echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -e . > /dev/null 2>&1
+          if [ $? -eq 0 ]; then
+            echo "Valid JSON"
+            echo '${{ secrets.AZURE_CREDENTIALS }}' | jq 'keys'
+          else
+            echo "::error::Invalid JSON format"
+          fi
 
       - name: Login to Azure
         uses: azure/login@v2
