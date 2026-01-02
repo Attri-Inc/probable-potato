@@ -34,9 +34,6 @@ on:
         required: false
         type: string
         default: '.'
-    secrets:
-      AZURE_CREDENTIALS: 
-        required: true
 
 jobs:
   build-and-deploy:
