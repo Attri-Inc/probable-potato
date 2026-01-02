@@ -1,4 +1,4 @@
-name: Deploy to App Service
+name: Deploy to Container App
 
 on:
   workflow_call:
@@ -20,10 +20,20 @@ on:
         description: 'Azure Resource Group name'
         required: true
         type: string
-      app_service_name:
-        description: 'Azure App Service name'
+      container_app_name:
+        description: 'Azure Container App name'
         required: true
         type: string
+      container_app_environment:
+        description: 'Azure Container App Environment name'
+        required: false
+        type: string
+        default: ''
+      clickup_webhook_url:
+        description: 'Clickup webhook URL for notifications'
+        required: false
+        type: string
+        default: ''
       dockerfile_path:
         description: 'Path to Dockerfile'
         required: false
@@ -35,7 +45,7 @@ on:
         type: string
         default: '.'
     secrets:
-      AZURE_CREDENTIALS: 
+      AZURE_CREDENTIALS:
         required: true
 
 jobs:
@@ -68,19 +78,10 @@ jobs:
             ${{ inputs.acr_name }}.azurecr.io/${{ inputs.image_name }}:${{ inputs.image_tag }}
             ${{ inputs.acr_name }}.azurecr.io/${{ inputs.image_name }}:${{ github.sha }}
           platforms: linux/amd64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
-      - name: Configure App Service to use ACR image
+      - name: Deploy to Container App
         run: |
-          az webapp config container set \
-            --name ${{ inputs.app_service_name }} \
+          az containerapp update \
+            --name ${{ inputs.container_app_name }} \
             --resource-group ${{ inputs.resource_group }} \
-            --container-image-name ${{ inputs.acr_name }}.azurecr.io/${{ inputs.image_name }}:${{ inputs.image_tag }} \
-            --container-registry-url https://${{ inputs.acr_name }}.azurecr.io
-
-      - name: Restart App Service
-        run: |
-          az webapp restart \
-            --name ${{ inputs.app_service_name }} \
-            --resource-group ${{ inputs.resource_group }}
+            --image ${{ inputs.acr_name }}.azurecr.io/${{ inputs.image_name }}:${{ inputs.image_tag }}
