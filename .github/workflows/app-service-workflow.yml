@@ -196,6 +196,7 @@ jobs:
             --slot ${{ inputs.slot_name }} \
             --preserve-vnet true \
             --action swap
+
           echo "Slot swap completed successfully"
 
       - name: Stop Deployment Slot to Prevent Duplicate Instances
@@ -217,11 +218,11 @@ jobs:
             --name ${{ inputs.app_service_name }} \
             --resource-group ${{ inputs.resource_group }} \
             --container-image-name ${{ inputs.acr_name }}.azurecr.io/${{ inputs.image_name }}:${{ inputs.image_tag }} \
-            --container-registry-url https://${{ inputs.acr_name }}.azurecr.io \
+            --container-registry-url https://${{ inputs.acr_name }}.azurecr.io
 
       - name: Restart App Service
         if: ${{ inputs.slot_name == '' }}
         run: |
           az webapp restart \
             --name ${{ inputs.app_service_name }} \
-            --resource-group ${{ inputs.resource_group }} \
+            --resource-group ${{ inputs.resource_group }}
