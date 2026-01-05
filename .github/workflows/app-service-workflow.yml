@@ -34,6 +34,11 @@ on:
         required: false
         type: string
         default: '.'
+      slot_name:
+        description: 'Deployment slot name (leave empty for production slot)'
+        required: false
+        type: string
+        default: ''
     secrets:
       AZURE_CREDENTIALS:
         required: true
@@ -73,14 +78,24 @@ jobs:
 
       - name: Configure App Service to use ACR image
         run: |
+          SLOT_ARG=""
+          if [ -n "${{ inputs.slot_name }}" ]; then
+            SLOT_ARG="--slot ${{ inputs.slot_name }}"
+          fi
           az webapp config container set \
             --name ${{ inputs.app_service_name }} \
             --resource-group ${{ inputs.resource_group }} \
             --container-image-name ${{ inputs.acr_name }}.azurecr.io/${{ inputs.image_name }}:${{ inputs.image_tag }} \
-            --container-registry-url https://${{ inputs.acr_name }}.azurecr.io
+            --container-registry-url https://${{ inputs.acr_name }}.azurecr.io \
+            $SLOT_ARG
 
       - name: Restart App Service
         run: |
+          SLOT_ARG=""
+          if [ -n "${{ inputs.slot_name }}" ]; then
+            SLOT_ARG="--slot ${{ inputs.slot_name }}"
+          fi
           az webapp restart \
             --name ${{ inputs.app_service_name }} \
-            --resource-group ${{ inputs.resource_group }}
+            --resource-group ${{ inputs.resource_group }} \
+            $SLOT_ARG
