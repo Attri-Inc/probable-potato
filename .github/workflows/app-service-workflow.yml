@@ -221,8 +221,8 @@ jobs:
           az webapp config container set \
             --name ${{ inputs.app_service_name }} \
             --resource-group ${{ inputs.resource_group }} \
-            --container-registry-user ${{ secrets.acr_username }} \
-            --container-registry-password ${{ secrets.acr_password }} \
+            --container-registry-user ${{ secrets.ACR_USERNAME }} \
+            --container-registry-password ${{ secrets.ACR_PASSWORD }} \
             --container-image-name ${{ inputs.acr_name }}.azurecr.io/${{ inputs.image_name }}:${{ inputs.image_tag }} \
             --container-registry-url https://${{ inputs.acr_name }}.azurecr.io
 
