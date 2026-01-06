@@ -16,14 +16,6 @@ on:
         required: false
         type: string
         default: 'latest'
-      acr_username:
-        description: 'Username of Azure ACR'
-        required: true
-        type: string
-      acr_password:
-        description: 'Password of Azure ACR'
-        required: true
-        type: string
       resource_group:
         description: 'Azure Resource Group name'
         required: true
