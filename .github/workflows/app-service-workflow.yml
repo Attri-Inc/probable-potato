@@ -34,6 +34,11 @@ on:
         required: false
         type: string
         default: '.'
+      slot_name:
+        description: 'Deployment slot name (leave empty for production slot)'
+        required: false
+        type: string
+        default: ''
     secrets:
       AZURE_CREDENTIALS:
         required: true
@@ -71,7 +76,143 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Configure App Service to use ACR image
+      - name: Deploy to Deployment Slot
+        if: ${{ inputs.slot_name != '' }}
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ inputs.app_service_name }}
+          slot-name: ${{ inputs.slot_name }}
+          images: ${{ inputs.acr_name }}.azurecr.io/${{ inputs.image_name }}:${{ inputs.image_tag }}
+
+      - name: Configure App Settings for Zero-Downtime Deployment
+        if: ${{ inputs.slot_name != '' }}
+        run: |
+          az webapp config appsettings set \
+            --resource-group ${{ inputs.resource_group }} \
+            --name ${{ inputs.app_service_name }} \
+            --slot ${{ inputs.slot_name != '' }} \
+            --settings \
+            WEBSITES_PORT=8000 \
+            WEBSITES_CONTAINER_START_TIME_LIMIT=3600 \
+            DOCKER_REGISTRY_SERVER_URL="https://${{ inputs.acr_name }}.azurecr.io" \
+            WEBSITE_SWAP_WARMUP_PING_PATH="/api/health" \
+            WEBSITE_SWAP_WARMUP_PING_STATUSES="200" \
+            WEBSITE_WARMUP_PATH="/api/health" \
+            WEBSITE_HEALTHCHECK_MAXPINGFAILURES=10 \
+            WEBSITE_TIME_ZONE="UTC" \
+            DOCKER_ENABLE_CI=true \
+            WORKERS=1
+
+      - name: Restart or Start Deployment Slot
+        if: ${{ inputs.slot_name != '' }}
+        run: |
+          echo "Checking staging slot state..."
+          SLOT_STATE=$(az webapp show \
+            --resource-group ${{ inputs.resource_group}} \
+            --name ${{ inputs.app_service_name }} \
+            --slot ${{ inputs.slot_name }} \
+            --query "state" -o tsv)
+
+          echo "Current slot state: $SLOT_STATE"
+
+          if [ "$SLOT_STATE" = "Running" ]; then
+            echo "Slot is running. Restarting to load new Docker image..."
+            az webapp restart \
+              --resource-group ${{ inputs.resource_group}} \
+              --name ${{ inputs.app_service_name }} \
+              --slot ${{ inputs.slot_name }}
+            echo "Restart command issued"
+          else
+            echo "Slot is stopped. Starting slot..."
+            az webapp start \
+              --resource-group ${{ inputs.resource_group}} \
+              --name ${{ inputs.app_service_name }}\
+              --slot ${{ inputs.slot_name }}
+            echo "Start command issued"
+          fi
+
+          echo "Waiting for container to pull and initialize..."
+
+
+      - name: Wait for Staging Slot Health
+        if: ${{ inputs.slot_name != '' }}
+        run: |
+          echo "Waiting for staging slot deployment to complete..."
+          sleep 60
+
+          MAX_ATTEMPTS=30
+          ATTEMPT=0
+
+          SLOT_HOSTNAME=$(az webapp show \
+          --resource-group "${{ inputs.resource_group }}" \
+          --name "${{ inputs.app_service_name }}" \
+          --slot "${{ inputs.slot_name }}" \
+          --query "defaultHostName" -o tsv)
+
+          HEALTH_URL="https://${SLOT_HOSTNAME}/api/health"
+          echo "Health URL: $HEALTH_URL"
+
+          while (( ATTEMPT < MAX_ATTEMPTS )); do
+            echo "Checking deployment status (attempt $((ATTEMPT + 1))/$MAX_ATTEMPTS)..."
+
+            STATE=$(az webapp show --resource-group ${{ inputs.resource_group }} \
+              --name ${{ inputs.app_service_name }} --slot ${{ inputs.slot_name }} \
+              --query "state" -o tsv)
+
+            echo "Current state: $STATE"
+
+            if [ "$STATE" = "Running" ]; then
+              echo "Staging slot is running. Checking health endpoint..."
+              sleep 20
+
+              HTTP_CODE=$(curl -sSL -o /dev/null -w "%{http_code}" "$HEALTH_URL") || HTTP_CODE="000"
+              echo "Received HTTP code: $HTTP_CODE"
+
+              if [[ "$HTTP_CODE" == 2?? ]]; then
+                echo "Health OK!"
+                exit 0
+              else
+                echo "Health check not OK (code: $HTTP_CODE). Fetching response snippet..."
+                curl -sSL --connect-timeout 5 --max-time 10 "$HEALTH_URL" | head -c 400 || true
+              fi
+            fi
+
+            ((ATTEMPT++))
+            if (( ATTEMPT < MAX_ATTEMPTS )); then
+              echo "Slot not ready yet. Waiting 15 seconds..."
+              sleep 15
+            fi
+          done
+
+          echo "ERROR: Deployment verification failed after $MAX_ATTEMPTS attempts"
+          exit 1
+
+      - name: Swap Slots with Zero Downtime
+        if: ${{ inputs.slot_name != '' }}
+        run: |
+          az webapp deployment slot swap \
+            --resource-group ${{ inputs.resource_group }} \
+            --name ${{ inputs.app_service_name }} \
+            --slot ${{ inputs.slot_name }} \
+            --preserve-vnet true \
+            --action swap
+
+          echo "Slot swap completed successfully"
+
+      - name: Stop Deployment Slot to Prevent Duplicate Instances
+        if: ${{ inputs.slot_name != '' }}
+        run: |
+          echo "Stopping Deployment slot to prevent multiple instances..."
+  
+          az webapp stop \
+            --resource-group ${{ inputs.resource_group }} \
+            --name ${{ inputs.app_service_name }} \
+            --slot ${{ inputs.slot_name }}
+  
+          echo "Staging slot stopped successfully"
+
+      - name: Configure App Service to use ACR Image
+        if: ${{ inputs.slot_name == '' }}
         run: |
           az webapp config container set \
             --name ${{ inputs.app_service_name }} \
@@ -80,6 +221,7 @@ jobs:
             --container-registry-url https://${{ inputs.acr_name }}.azurecr.io
 
       - name: Restart App Service
+        if: ${{ inputs.slot_name == '' }}
         run: |
           az webapp restart \
             --name ${{ inputs.app_service_name }} \
