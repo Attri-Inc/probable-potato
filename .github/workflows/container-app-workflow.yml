@@ -71,7 +71,6 @@ jobs:
           push: true
           tags: |
             ${{ inputs.acr_name }}.azurecr.io/${{ inputs.image_name }}:${{ inputs.image_tag }}
-            ${{ inputs.acr_name }}.azurecr.io/${{ inputs.image_name }}:${{ github.sha }}
           platforms: linux/amd64
 
       - name: Deploy to Container App
