@@ -50,6 +50,10 @@ on:
     secrets:
       AZURE_CREDENTIALS:
         required: true
+      ACR_USERNAME:
+        required: true
+      ACR_PASSWORD:
+        required: true
 
 jobs:
   build-and-deploy:
@@ -225,8 +229,8 @@ jobs:
           az webapp config container set \
             --name ${{ inputs.app_service_name }} \
             --resource-group ${{ inputs.resource_group }} \
-            --container-registry-user ${{ inputs.acr_username }} \
-            --container-registry-password ${{ inputs.acr_password }} \
+            --container-registry-user ${{ secrets.acr_username }} \
+            --container-registry-password ${{ secrets.acr_password }} \
             --container-image-name ${{ inputs.acr_name }}.azurecr.io/${{ inputs.image_name }}:${{ inputs.image_tag }} \
             --container-registry-url https://${{ inputs.acr_name }}.azurecr.io
 
