@@ -1,3 +1,7 @@
+# Required Service Principle Roles
+# - Contributor
+# - AcrPull
+
 name: Deploy to Container App
 
 on:

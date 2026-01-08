@@ -1,3 +1,9 @@
+# Required Service Principle Roles
+# - AcrPush
+# - AcrPull
+# - Website Contributor
+
+
 name: Deploy to App Service
 
 on:
